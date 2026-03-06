@@ -59,14 +59,14 @@ pub enum NewTemplateError {
     #[error("Manifest read error: {0}")]
     Manifest(#[from] ManifestError),
 
-    #[error("Collect files error: {0}")]
-    CollectFiles(#[from] walkdir::Error),
-
     #[error("Template with name already exists")]
     AlreadyExists,
 
     #[error("Config error: {0}")]
     ConfigError(#[from] ConfigError),
+
+    #[error("Ignore error: {0}")]
+    IgnoreError(#[from] ignore::Error),
 }
 
 pub type NewTemplateResult<T> = std::result::Result<T, NewTemplateError>;

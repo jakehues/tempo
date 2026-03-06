@@ -361,7 +361,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "toml",
- "walkdir",
 ]
 
 [[package]]

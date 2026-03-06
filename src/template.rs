@@ -3,8 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ignore::{WalkBuilder, gitignore::GitignoreBuilder};
 use serde::{Deserialize, Serialize};
-use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     config::TemplatesConfig,
@@ -73,23 +73,41 @@ pub fn create_new_template(
     Ok(())
 }
 
-fn should_enter(entry: &DirEntry, ignored: &[String]) -> bool {
-    let name = entry.file_name().to_string_lossy();
-    let name = name.as_ref();
-    !ignored.iter().any(|s| s == name)
-}
-
 fn collect_files(path: impl AsRef<Path>, manifest: &Manifest) -> NewTemplateResult<Vec<PathBuf>> {
-    let base = path.as_ref();
+    let base = path.as_ref().to_path_buf();
     let mut files = Vec::new();
-    let walker = WalkDir::new(base).into_iter();
-    for entry in walker.filter_entry(|e| should_enter(e, &manifest.ignored_files)) {
-        let entry = entry?;
 
-        if entry.file_type().is_file() {
-            files.push(entry.into_path());
+    let mut ignore_builder = GitignoreBuilder::new(&base);
+    for pattern in &manifest.ignored_files {
+        ignore_builder.add_line(None, pattern)?;
+    }
+    let ignore_matcher = ignore_builder.build()?;
+
+    let walker_base = base.clone();
+    let walker = WalkBuilder::new(&walker_base)
+        .hidden(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .filter_entry(move |entry| {
+            let path = entry.path();
+            let rel = path.strip_prefix(&walker_base).unwrap_or(path);
+
+            !ignore_matcher
+                .matched(rel, entry.file_type().map(|f| f.is_dir()).unwrap_or(false))
+                .is_ignore()
+        })
+        .build();
+
+    for entry in walker {
+        let entry = entry?;
+        let path = entry.path();
+
+        if entry.file_type().map(|f| f.is_file()).unwrap_or(false) {
+            files.push(path.strip_prefix(&base).unwrap_or(path).to_path_buf());
         }
     }
+
     Ok(files)
 }
 
